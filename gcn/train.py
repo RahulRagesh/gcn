@@ -24,6 +24,7 @@ flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
+flags.DEFINE_integer('is_attentive',0,'Learn Edge Attention Weights')
 
 # Load data
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)
@@ -56,7 +57,7 @@ placeholders = {
 }
 
 # Create model
-model = model_func(placeholders, input_dim=features[2][1], logging=True)
+model = model_func(placeholders, input_dim=features[2][1], logging=True, is_attentive = FLAGS.is_attentive == 1, num_indices=support[0][0].shape[0] , num_nodes=support[0][2][0] )
 
 # Initialize session
 sess = tf.Session()

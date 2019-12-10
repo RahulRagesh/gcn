@@ -50,9 +50,8 @@ class Layer(object):
         __call__(inputs): Wrapper for _call()
         _log_vars(): Log all variables
     """
-
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging'}
+        allowed_kwargs = {'name', 'logging','is_attentive','num_indices','num_nodes'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -146,17 +145,26 @@ class GraphConvolution(Layer):
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
+        self.is_attentive = kwargs.get('is_attentive',False)
+
+        if self.is_attentive:
+            self.indices = [support.indices for support in self.support]
+            self.num_indices = kwargs['num_indices']
+            self.num_nodes = kwargs['num_nodes']
 
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
 
         with tf.variable_scope(self.name + '_vars'):
             for i in range(len(self.support)):
-                self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
-                                                        name='weights_' + str(i))
+                self.vars['weights_' + str(i)] = glorot([input_dim, output_dim], name='weights_' + str(i))
             if self.bias:
                 self.vars['bias'] = zeros([output_dim], name='bias')
 
+            if self.is_attentive:
+                for i in range(len(self.support)):
+                    self.vars['attentive_weights_' + str(i)] = ones((self.num_indices,), name='attentive_weights_' + str(i))
+                    self.support[i] = tf.SparseTensor(self.indices[i], tf.identity(self.vars['attentive_weights_' + str(i)]), (self.num_nodes,self.num_nodes))  # v0.8
         if self.logging:
             self._log_vars()
 

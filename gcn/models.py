@@ -7,9 +7,10 @@ FLAGS = flags.FLAGS
 
 class Model(object):
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging'}
+        allowed_kwargs = {'name', 'logging','is_attentive','num_indices','num_nodes'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
+
         name = kwargs.get('name')
         if not name:
             name = self.__class__.__name__.lower()
@@ -138,8 +139,10 @@ class GCN(Model):
         # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
         self.output_dim = placeholders['labels'].get_shape().as_list()[1]
         self.placeholders = placeholders
-
         self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+        self.is_attentive = kwargs['is_attentive']
+        self.num_indices = kwargs['num_indices']
+        self.num_nodes = kwargs['num_nodes']
 
         self.build()
 
@@ -164,14 +167,20 @@ class GCN(Model):
                                             act=tf.nn.relu,
                                             dropout=True,
                                             sparse_inputs=True,
-                                            logging=self.logging))
+                                            logging=self.logging,
+                                            is_attentive=self.is_attentive,
+                                            num_indices = self.num_indices,
+                                            num_nodes = self.num_nodes))
 
         self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
                                             output_dim=self.output_dim,
                                             placeholders=self.placeholders,
                                             act=lambda x: x,
                                             dropout=True,
-                                            logging=self.logging))
+                                            logging=self.logging,
+                                            is_attentive=False,
+                                            num_indices = self.num_indices,
+                                            num_nodes = self.num_nodes))
 
     def predict(self):
         return tf.nn.softmax(self.outputs)
