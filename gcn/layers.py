@@ -52,7 +52,7 @@ class Layer(object):
     """
 
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging'}
+        allowed_kwargs = {'name', 'logging','propagate_labels'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -184,5 +184,44 @@ class GraphConvolution(Layer):
         # bias
         if self.bias:
             output += self.vars['bias']
+
+        return self.act(output)
+
+
+class LabelPropagation(Layer):
+    """Label Propagation layer."""
+    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+                 sparse_inputs=False, act=tf.nn.relu, bias=False,
+                 featureless=False, **kwargs):
+        super(LabelPropagation, self).__init__(**kwargs)
+
+        if dropout:
+            self.dropout = placeholders['dropout']
+        else:
+            self.dropout = 0.
+
+        self.act = act
+        self.support = placeholders['support']
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+
+        # helper variable for sparse dropout
+        self.num_features_nonzero = placeholders['num_features_nonzero']
+
+    def _call(self, inputs):
+        x = inputs
+
+        # dropout
+        if self.sparse_inputs:
+            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+        else:
+            x = tf.nn.dropout(x, 1-self.dropout)
+
+        supports = list()
+        for i in range(len(self.support)):
+            support = dot(self.support[i], x, sparse=True)
+            supports.append(support)
+        output = tf.add_n(supports)
 
         return self.act(output)
