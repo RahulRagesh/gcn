@@ -178,7 +178,7 @@ class GCN(Model):
                                             act=lambda x: x,
                                             dropout=True,
                                             logging=self.logging,
-                                            is_attentive=False,
+                                            is_attentive=self.is_attentive,
                                             num_indices = self.num_indices,
                                             num_nodes = self.num_nodes))
 
