@@ -1,5 +1,12 @@
 import tensorflow as tf
 
+def masked_cross_entropy(preds, labels, mask):
+    """Cross-entropy loss with masking."""
+    loss = -tf.reduce_sum(labels * tf.log(preds), 1)
+    mask = tf.cast(mask, dtype=tf.float32)
+    mask /= tf.reduce_mean(mask)
+    loss *= mask
+    return tf.reduce_mean(loss)
 
 def masked_softmax_cross_entropy(preds, labels, mask):
     """Softmax cross-entropy loss with masking."""

@@ -25,6 +25,7 @@ flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('propagate_labels', 0, 'Enable Label Propagation')
+flags.DEFINE_integer('learnable_label_propagation', 0, 'Enable Learnable Label Propagation')
 
 # Load data
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)
@@ -46,8 +47,14 @@ elif FLAGS.model == 'dense':
 else:
     raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
 
+if False:
+    label_aggregator_matrix = sparse_to_tuple(row_normalize_sparse_matrix(adj))
+else:
+    label_aggregator_matrix = sparse_to_tuple(adj)
+
 # Define placeholders
 placeholders = {
+    'adj': tf.sparse_placeholder(tf.float32),
     'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
     'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features[2], dtype=tf.int64)),
     'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
@@ -57,7 +64,7 @@ placeholders = {
 }
 
 # Create model
-model = model_func(placeholders, input_dim=features[2][1], logging=True, propagate_labels = FLAGS.propagate_labels ==1)
+model = model_func(placeholders, input_dim=features[2][1], logging=True, propagate_labels = FLAGS.propagate_labels==1)
 
 # Initialize session
 sess = tf.Session()
@@ -66,7 +73,7 @@ sess = tf.Session()
 # Define model evaluation function
 def evaluate(features, support, labels, mask, placeholders):
     t_test = time.time()
-    feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
+    feed_dict_val = construct_feed_dict(features, support, label_aggregator_matrix, labels, mask, placeholders)
     outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
     return outs_val[0], outs_val[1], (time.time() - t_test)
 
@@ -75,13 +82,14 @@ def evaluate(features, support, labels, mask, placeholders):
 sess.run(tf.global_variables_initializer())
 
 cost_val = []
-
+best_val = 0.0
+best_model_ckpt_path = 'best_model_checkpoint'
 # Train model
 for epoch in range(FLAGS.epochs):
 
     t = time.time()
     # Construct feed dictionary
-    feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
+    feed_dict = construct_feed_dict(features, support, label_aggregator_matrix, y_train, train_mask, placeholders)
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
 
     # Training step
@@ -96,6 +104,10 @@ for epoch in range(FLAGS.epochs):
           "train_acc=", "{:.5f}".format(outs[2]), "val_loss=", "{:.5f}".format(cost),
           "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
 
+    if acc > best_val:
+        best_val = acc
+        model.save(best_model_ckpt_path, sess)
+
     if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
         print("Early stopping...")
         break
@@ -103,6 +115,9 @@ for epoch in range(FLAGS.epochs):
 print("Optimization Finished!")
 
 # Testing
+print('Restoring Best Model')
+model.load(best_model_ckpt_path, sess)
+
 test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
 print("Test set results:", "cost=", "{:.5f}".format(test_cost),
       "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))

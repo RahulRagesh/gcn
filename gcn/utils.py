@@ -135,12 +135,13 @@ def preprocess_adj(adj):
     return sparse_to_tuple(adj_normalized)
 
 
-def construct_feed_dict(features, support, labels, labels_mask, placeholders):
+def construct_feed_dict(features, support, adj, labels, labels_mask, placeholders):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update({placeholders['labels']: labels})
     feed_dict.update({placeholders['labels_mask']: labels_mask})
     feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['adj']: adj})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
     return feed_dict
@@ -167,3 +168,22 @@ def chebyshev_polynomials(adj, k):
         t_k.append(chebyshev_recurrence(t_k[-1], t_k[-2], scaled_laplacian))
 
     return sparse_to_tuple(t_k)
+
+
+def row_normalize_sparse_matrix(matrix, gamma = -1):
+    b_graph = matrix.copy().astype(np.float32)
+    r_graph = matrix.copy().astype(np.float32)
+
+    row_sums = []
+    for i in range(matrix.shape[0]):
+        row_sum = r_graph.data[r_graph.indptr[i]:r_graph.indptr[i+1]].sum()
+        if row_sum == 0:
+            row_sums.append(0.0)
+        else:
+            row_sums.append(row_sum**gamma)
+
+    for i in range(matrix.shape[0]):
+        if row_sums[i] != 0:
+            b_graph.data[r_graph.indptr[i]:r_graph.indptr[i+1]] *= row_sums[i]    
+    
+    return b_graph

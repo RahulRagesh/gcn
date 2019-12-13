@@ -52,7 +52,7 @@ class Layer(object):
     """
 
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging','propagate_labels'}
+        allowed_kwargs = {'name', 'logging','propagate_labels', 'learnable_label_propagation'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -190,38 +190,24 @@ class GraphConvolution(Layer):
 
 class LabelPropagation(Layer):
     """Label Propagation layer."""
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
-                 sparse_inputs=False, act=tf.nn.relu, bias=False,
-                 featureless=False, **kwargs):
+    def __init__(self, placeholders, act=tf.nn.relu, bias=False, **kwargs):
         super(LabelPropagation, self).__init__(**kwargs)
-
-        if dropout:
-            self.dropout = placeholders['dropout']
-        else:
-            self.dropout = 0.
-
+        
         self.act = act
-        self.support = placeholders['support']
-        self.sparse_inputs = sparse_inputs
-        self.featureless = featureless
-        self.bias = bias
+        self.adj = placeholders['adj']
+        self.learnable_label_propagation = kwargs.get('learnable_label_propagation',False)
+        self.bias = bias 
+        
+        if self.learnable_label_propagation:
+            self.indices = self.adj.indices
+            self.num_indices = kwargs['num_indices']
+            self.num_nodes = kwargs['num_nodes']
+            self.vars['label_propagation_weights'] = ones((self.num_indices,), name='label_propagation_weights')
+            self.adj = tf.SparseTensor(self.indices, self.vars['label_propagation_weights'], (self.num_nodes,self.num_nodes))
 
-        # helper variable for sparse dropout
-        self.num_features_nonzero = placeholders['num_features_nonzero']
+        if self.logging:
+            self._log_vars()
 
     def _call(self, inputs):
-        x = inputs
-
-        # dropout
-        if self.sparse_inputs:
-            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
-        else:
-            x = tf.nn.dropout(x, 1-self.dropout)
-
-        supports = list()
-        for i in range(len(self.support)):
-            support = dot(self.support[i], x, sparse=True)
-            supports.append(support)
-        output = tf.add_n(supports)
-
+        output = dot(self.adj, inputs, sparse=True)
         return self.act(output)

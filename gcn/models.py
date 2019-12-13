@@ -7,7 +7,7 @@ FLAGS = flags.FLAGS
 
 class Model(object):
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging', 'propagate_labels'}
+        allowed_kwargs = {'name', 'logging', 'propagate_labels', 'learnable_label_propagation'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -66,20 +66,19 @@ class Model(object):
     def _accuracy(self):
         raise NotImplementedError
 
-    def save(self, sess=None):
+    def save(self, ckpt, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
         saver = tf.train.Saver(self.vars)
-        save_path = saver.save(sess, "tmp/%s.ckpt" % self.name)
+        save_path = saver.save(sess, ckpt)
         print("Model saved in file: %s" % save_path)
 
-    def load(self, sess=None):
+    def load(self, ckpt, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
         saver = tf.train.Saver(self.vars)
-        save_path = "tmp/%s.ckpt" % self.name
-        saver.restore(sess, save_path)
-        print("Model restored from file: %s" % save_path)
+        saver.restore(sess, ckpt)
+        print("Model restored from file: %s" % ckpt)
 
 
 class MLP(Model):
@@ -102,7 +101,7 @@ class MLP(Model):
             self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
 
         # Cross entropy error
-        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
+        self.loss += masked_cross_entropy(self.outputs, self.placeholders['labels'],
                                                   self.placeholders['labels_mask'])
 
     def _accuracy(self):
@@ -125,8 +124,10 @@ class MLP(Model):
                                  dropout=True,
                                  logging=self.logging))
 
+        self.layers.append(tf.nn.softmax)
+
     def predict(self):
-        return tf.nn.softmax(self.outputs)
+        return self.outputs
 
 
 class GCN(Model):
@@ -140,7 +141,7 @@ class GCN(Model):
         self.placeholders = placeholders
         self.propagate_labels = kwargs.get('propagate_labels',False)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
-
+        self.learnable_label_propagation = kwargs.get('learnable_label_propagation',False)
         self.build()
 
     def _loss(self):
@@ -149,7 +150,7 @@ class GCN(Model):
             self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
 
         # Cross entropy error
-        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
+        self.loss += masked_cross_entropy(self.outputs, self.placeholders['labels'],
                                                   self.placeholders['labels_mask'])
 
     def _accuracy(self):
@@ -173,15 +174,13 @@ class GCN(Model):
                                             dropout=True,
                                             logging=self.logging))
         
+        self.layers.append(tf.nn.softmax)
+        
         if self.propagate_labels:
-            self.layers.append(tf.nn.softmax)
-
-            self.layers.append(LabelPropagation(input_dim=self.output_dim,
-                                                output_dim=self.output_dim,
-                                                placeholders=self.placeholders,
+            self.layers.append(LabelPropagation(placeholders=self.placeholders,
                                                 act=lambda x: x,
-                                                dropout=False,
+                                                learnable_label_propagation = self.learnable_label_propagation,
                                                 logging=self.logging))
 
     def predict(self):
-        return tf.nn.softmax(self.outputs)
+        return self.outputs
