@@ -4,7 +4,10 @@ import networkx as nx
 import scipy.sparse as sp
 from scipy.sparse.linalg.eigen.arpack import eigsh
 import sys
-
+import os
+import time
+from os import listdir
+from os.path import isdir, join
 
 def parse_index_file(filename):
     """Parse index file."""
@@ -167,3 +170,96 @@ def chebyshev_polynomials(adj, k):
         t_k.append(chebyshev_recurrence(t_k[-1], t_k[-2], scaled_laplacian))
 
     return sparse_to_tuple(t_k)
+
+
+def create_dir(dir_path):
+    """
+    Create directory structure given as `dir_path`.
+    If path exists ask whether to overwrite it or make a new directory by appending Run ID to it.
+
+    return: path to directory created
+    """
+        
+    if os.path.exists(dir_path):    
+        run_id = 0
+        dir_path = dir_path+'-%04d'%run_id
+        while(os.path.exists(dir_path)):
+            run_id = run_id + 1
+            dir_path = dir_path[:-4]+'%04d'%run_id
+
+    os.makedirs(dir_path)
+    return dir_path
+
+
+def load_config_file(config_file):
+    """
+    load `config_file` which contains one parameter in each line of the form `param_name`=`param_value`.
+    lines starting with `#` are ignored while parsing.
+    """
+    config_dict = {}
+    with open(config_file, 'r') as f:
+        line = f.readline().strip()
+        while line:
+            if line[0] != '#':
+                line = line.replace(' ', '').split('=')
+                if len(line) != 2:
+                    print('Warning: Broken configuration item!')
+                else:
+                    config_dict[line[0]] = line[1]
+            line = f.readline().strip()
+    return config_dict
+
+def update_params_for_config(param_names, params, training_params_dict, embedding_metadata_dict, model_params_dict):
+    params_str = ""
+    for param_name, param in zip(param_names,params):
+        target_dict,target_param = param_name.split('.')
+        eval(target_dict)[target_param] = param
+        if param < 0.1:
+            param_str = "%1.0e"%param
+        else:
+            param_str = str(param)
+        params_str  = "%s\t%s_%s"%(params_str,target_param,param_str)
+    return training_params_dict, embedding_metadata_dict, model_params_dict, params_str.strip()
+
+def get_hyperparameter_configs(model_params_dict, training_params_dict, embedding_metadata_dict):
+    param_names = []
+    param_lists = []
+    for key, param in model_params_dict.items():
+        if type(param) is list and len(param)>1: 
+            exec("%s = %s"%(key+"_list",param))
+            param_names.append("model_params_dict."+key)
+            param_lists.append(eval(key+"_list"))
+
+    for key, param in training_params_dict.items():
+        if type(param) is list and len(param)>1: 
+            exec("%s = %s"%(key+"_list",param))
+            param_names.append("training_params_dict."+key)
+            param_lists.append(eval(key+"_list"))
+
+    for key, param in embedding_metadata_dict.items():
+        if type(param) is list and len(param)>1: 
+            exec("%s = %s"%(key+"_list",param))
+            param_names.append("embedding_metadata_dict."+key)
+            param_lists.append(eval(key+"_list"))
+    return param_names,param_lists
+
+
+
+# Define model evaluation function
+def evaluate(sess, model, features, support, labels, mask, placeholders):
+    t_test = time.time()
+    feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
+    outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
+    return outs_val[0], outs_val[1], (time.time() - t_test)
+
+def pkl_dump(file_path, obj_to_dump, mode='wb', protocol=pkl.HIGHEST_PROTOCOL):
+    """
+    dump `obj_to_dump` to `file_path` with pickle `protocol` (default: pickle.HIGHEST_PROTOCOL)
+    """
+    pkl.dump(obj_to_dump, open(file_path, mode), protocol)
+
+def pkl_load(file_path, mode='rb'):
+    """
+    load pickle file from `file_path`
+    """
+    return pkl.load(open(file_path, mode))

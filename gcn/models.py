@@ -1,10 +1,6 @@
 from gcn.layers import *
 from gcn.metrics import *
 
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-
-
 class Model(object):
     def __init__(self, **kwargs):
         allowed_kwargs = {'name', 'logging'}
@@ -66,24 +62,19 @@ class Model(object):
     def _accuracy(self):
         raise NotImplementedError
 
-    def save(self, sess=None):
-        if not sess:
-            raise AttributeError("TensorFlow session not provided.")
+    def save(self, ckpt, sess):
         saver = tf.train.Saver(self.vars)
-        save_path = saver.save(sess, "tmp/%s.ckpt" % self.name)
+        save_path = saver.save(sess, ckpt)
         print("Model saved in file: %s" % save_path)
 
-    def load(self, sess=None):
-        if not sess:
-            raise AttributeError("TensorFlow session not provided.")
+    def load(self, ckpt, sess):
         saver = tf.train.Saver(self.vars)
-        save_path = "tmp/%s.ckpt" % self.name
-        saver.restore(sess, save_path)
-        print("Model restored from file: %s" % save_path)
+        saver.restore(sess, ckpt)
+        print("Model restored from file: %s" % ckpt)
 
 
 class MLP(Model):
-    def __init__(self, placeholders, input_dim, **kwargs):
+    def __init__(self, placeholders, configs, input_dim, **kwargs):
         super(MLP, self).__init__(**kwargs)
 
         self.inputs = placeholders['features']
@@ -91,15 +82,15 @@ class MLP(Model):
         # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
         self.output_dim = placeholders['labels'].get_shape().as_list()[1]
         self.placeholders = placeholders
-
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+        self.configs = configs
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.configs['learning_rate'])
 
         self.build()
 
     def _loss(self):
         # Weight decay loss
         for var in self.layers[0].vars.values():
-            self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
+            self.loss += self.configs['weight_decay'] * tf.nn.l2_loss(var)
 
         # Cross entropy error
         self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
@@ -111,14 +102,14 @@ class MLP(Model):
 
     def _build(self):
         self.layers.append(Dense(input_dim=self.input_dim,
-                                 output_dim=FLAGS.hidden1,
+                                 output_dim=self.configs['hidden1'],
                                  placeholders=self.placeholders,
                                  act=tf.nn.relu,
                                  dropout=True,
                                  sparse_inputs=True,
                                  logging=self.logging))
 
-        self.layers.append(Dense(input_dim=FLAGS.hidden1,
+        self.layers.append(Dense(input_dim=self.configs['hidden1'],
                                  output_dim=self.output_dim,
                                  placeholders=self.placeholders,
                                  act=lambda x: x,
@@ -130,7 +121,7 @@ class MLP(Model):
 
 
 class GCN(Model):
-    def __init__(self, placeholders, input_dim, **kwargs):
+    def __init__(self, placeholders, configs, input_dim, **kwargs):
         super(GCN, self).__init__(**kwargs)
 
         self.inputs = placeholders['features']
@@ -138,15 +129,15 @@ class GCN(Model):
         # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
         self.output_dim = placeholders['labels'].get_shape().as_list()[1]
         self.placeholders = placeholders
-
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+        self.configs = configs
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.configs['learning_rate'])
 
         self.build()
 
     def _loss(self):
         # Weight decay loss
         for var in self.layers[0].vars.values():
-            self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
+            self.loss += self.configs['weight_decay'] * tf.nn.l2_loss(var)
 
         # Cross entropy error
         self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
@@ -159,14 +150,14 @@ class GCN(Model):
     def _build(self):
 
         self.layers.append(GraphConvolution(input_dim=self.input_dim,
-                                            output_dim=FLAGS.hidden1,
+                                            output_dim=self.configs['hidden1'],
                                             placeholders=self.placeholders,
                                             act=tf.nn.relu,
                                             dropout=True,
                                             sparse_inputs=True,
                                             logging=self.logging))
 
-        self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
+        self.layers.append(GraphConvolution(input_dim=self.configs['hidden1'],
                                             output_dim=self.output_dim,
                                             placeholders=self.placeholders,
                                             act=lambda x: x,

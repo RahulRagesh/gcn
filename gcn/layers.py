@@ -1,11 +1,12 @@
 from gcn.inits import *
 import tensorflow as tf
 
-flags = tf.app.flags
-FLAGS = flags.FLAGS
 
 # global unique layer ID dictionary for layer name assignment
 _LAYER_UIDS = {}
+
+def reset_layer_uid():
+    _LAYER_UIDS = {}
 
 
 def get_layer_uid(layer_name=''):
