@@ -16,7 +16,7 @@ np.random.seed(seed)
 tf.set_random_seed(seed)
 
 
-best_model_path = 'results/gcn/cora'
+best_model_path = sys.argv[1]
 
 configs = pkl_load(best_model_path+'/configs_dict.pkl')
 
@@ -40,6 +40,14 @@ elif configs['model'] == 'dense':
 else:
     raise ValueError('Invalid argument for model: ' + str(configs['model']))
 
+configs['num_indices'] =  support[0][0].shape[0]
+configs['num_nodes'] = support[0][2][0]
+
+if configs.get('propagate_labels',False):
+    if configs.get('learnable_label_propagation',False):
+        configs['label_aggregator_matrix'] = indices_to_aggregator(sparse_to_tuple(adj)[0])
+    else:
+        configs['label_aggregator_matrix'] = sparse_to_tuple(row_normalize_sparse_matrix(adj))
 
 # Define placeholders
 placeholders = {
@@ -104,7 +112,7 @@ print("Optimization Finished!")
 
 # Testing
 tf.reset_default_graph()
-model.load(best_model_path, sess)
+model.load(best_model_path + '/best_model', sess)
 
 test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
 print("Test set results:", "cost=", "{:.5f}".format(test_cost),

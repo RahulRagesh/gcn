@@ -134,7 +134,7 @@ def normalize_adj(adj):
 
 def preprocess_adj(adj):
     """Preprocessing of adjacency matrix for simple GCN model and conversion to tuple representation."""
-    adj_normalized = normalize_adj(adj + sp.eye(adj.shape[0]))
+    adj_normalized = normalize_adj(adj)
     return sparse_to_tuple(adj_normalized)
 
 
@@ -209,47 +209,32 @@ def load_config_file(config_file):
             line = f.readline().strip()
     return config_dict
 
-def update_params_for_config(param_names, params, training_params_dict, embedding_metadata_dict, model_params_dict):
+def update_params_for_config(param_names, params, configs_dict):
     params_str = ""
     for param_name, param in zip(param_names,params):
         target_dict,target_param = param_name.split('.')
         eval(target_dict)[target_param] = param
-        if param < 0.1:
-            param_str = "%1.0e"%param
-        else:
-            param_str = str(param)
+        param_str = str(param)
         params_str  = "%s\t%s_%s"%(params_str,target_param,param_str)
-    return training_params_dict, embedding_metadata_dict, model_params_dict, params_str.strip()
+    return configs_dict, params_str.strip()
 
-def get_hyperparameter_configs(model_params_dict, training_params_dict, embedding_metadata_dict):
+def get_hyperparameter_configs(*param_dicts):
     param_names = []
     param_lists = []
-    for key, param in model_params_dict.items():
-        if type(param) is list and len(param)>1: 
-            exec("%s = %s"%(key+"_list",param))
-            param_names.append("model_params_dict."+key)
-            param_lists.append(eval(key+"_list"))
-
-    for key, param in training_params_dict.items():
-        if type(param) is list and len(param)>1: 
-            exec("%s = %s"%(key+"_list",param))
-            param_names.append("training_params_dict."+key)
-            param_lists.append(eval(key+"_list"))
-
-    for key, param in embedding_metadata_dict.items():
-        if type(param) is list and len(param)>1: 
-            exec("%s = %s"%(key+"_list",param))
-            param_names.append("embedding_metadata_dict."+key)
-            param_lists.append(eval(key+"_list"))
+    for param_dict in param_dicts:
+        for key, param in param_dict.items():
+            if type(param) is list and len(param)>1: 
+                exec("%s = %s"%(key+"_list",param))
+                param_names.append("configs_dict."+key)
+                param_lists.append(eval(key+"_list"))
     return param_names,param_lists
-
 
 
 # Define model evaluation function
 def evaluate(sess, model, features, support, labels, mask, placeholders):
     t_test = time.time()
     feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
-    outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
+    outs_val = sess.run([model.pred_error, model.accuracy], feed_dict=feed_dict_val)
     return outs_val[0], outs_val[1], (time.time() - t_test)
 
 def pkl_dump(file_path, obj_to_dump, mode='wb', protocol=pkl.HIGHEST_PROTOCOL):
@@ -263,3 +248,28 @@ def pkl_load(file_path, mode='rb'):
     load pickle file from `file_path`
     """
     return pkl.load(open(file_path, mode))
+
+def indices_to_aggregator(indices):
+  aggregator_matrix = sp.lil_matrix((indices.shape[0], indices.shape[0]), dtype=np.float32)
+  for i, (a,b) in enumerate(indices):
+    aggregator_matrix[i,np.argwhere(indices[:,0]==a)[:,0]] = 1
+  return sparse_to_tuple(aggregator_matrix)
+
+
+def row_normalize_sparse_matrix(matrix, gamma = -1):
+    b_graph = matrix.astype(np.float32).copy()
+    r_graph = matrix.astype(np.float32).copy()
+
+    row_sums = []
+    for i in range(matrix.shape[0]):
+        row_sum = r_graph.data[r_graph.indptr[i]:r_graph.indptr[i+1]].sum()
+        if row_sum == 0:
+            row_sums.append(0.0)
+        else:
+            row_sums.append(row_sum**gamma)
+
+    for i in range(matrix.shape[0]):
+        if row_sums[i] != 0:
+            b_graph.data[r_graph.indptr[i]:r_graph.indptr[i+1]] *= row_sums[i]    
+    
+    return b_graph

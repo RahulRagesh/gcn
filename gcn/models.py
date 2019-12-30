@@ -50,8 +50,13 @@ class Model(object):
         # Build metrics
         self._loss()
         self._accuracy()
+        if self.configs['is_attentive']:
+            self.attentive_adj_opt = self.optimizer.minimize(self.loss, var_list = tf.get_collection('attentive_adj'))
+        if self.configs['learnable_label_propagation'] and self.configs['propagate_labels']:
+            self.label_prop_opt = self.optimizer.minimize(self.loss, var_list = tf.get_collection('attentive_label'))
 
-        self.opt_op = self.optimizer.minimize(self.loss)
+        self.model_weights_opt = self.optimizer.minimize(self.loss, var_list = tf.get_collection('model_weights'))
+        self.opt_op = self.optimizer.minimize(self.loss, var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
 
     def predict(self):
         pass
@@ -89,8 +94,10 @@ class MLP(Model):
 
     def _loss(self):
         # Weight decay loss
-        for var in self.layers[0].vars.values():
-            self.loss += self.configs['weight_decay'] * tf.nn.l2_loss(var)
+        for layer in self.layers:
+            for key, var in layer.vars.items():
+                if not key.startswith('attentive'):
+                    self.loss += self.configs['weight_decay'] * tf.nn.l2_loss(var)
 
         # Cross entropy error
         self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
@@ -131,25 +138,62 @@ class GCN(Model):
         self.placeholders = placeholders
         self.configs = configs
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.configs['learning_rate'])
+        self.is_attentive = configs.get('is_attentive',False)
+        self.num_indices = configs.get('num_indices',0)
+        self.num_nodes = configs.get('num_nodes',0)
+
+        self.propagate_labels = configs.get('propagate_labels',False)
 
         self.build()
 
     def _loss(self):
-        # Weight decay loss
-        for var in self.layers[0].vars.values():
-            self.loss += self.configs['weight_decay'] * tf.nn.l2_loss(var)
+        # Weight Regularization
+        self.weight_reg = 0
+        i = 0
+        for layer in self.layers:
+            if isinstance(layer,GraphConvolution):
+                for key, var in layer.vars.items():
+                    if not key.startswith('attentive'):
+                        self.weight_reg += self.configs['weight_decay'][i] * tf.nn.l2_loss(var)
+                i = i + 1
+        self.loss+=self.weight_reg
 
         # Cross entropy error
-        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
-                                                  self.placeholders['labels_mask'])
+        self.pred_error = masked_cross_entropy(self.outputs, self.placeholders['labels'],
+                                                  self.placeholders['labels_mask']) 
+        self.loss += self.pred_error
+
+        # Attentive Regularization
+        self.attentive_reg = tf.constant(0.0)
+        i = 0        
+        if self.is_attentive:
+            for layer in self.layers:
+                if isinstance(layer,GraphConvolution):
+                    for key, var in layer.vars.items():
+                        if key.startswith('attentive'):
+                            self.attentive_reg += self.configs['attentive_reg'][i] * tf.nn.l2_loss(var - layer.attentive_feat_prop_init)
+                    i = i + 1           
+            self.loss += self.attentive_reg
 
     def _accuracy(self):
         self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
                                         self.placeholders['labels_mask'])
 
     def _build(self):
+        
+        if self.configs['n_layers'] == 1:
+            self.layers.append(GraphConvolution(configs = self.configs,
+                                            input_dim=self.input_dim,
+                                            output_dim=self.output_dim,
+                                            placeholders=self.placeholders,
+                                            act=lambda x: x,
+                                            dropout=True,
+                                            sparse_inputs=True,
+                                            logging=self.logging))
 
-        self.layers.append(GraphConvolution(input_dim=self.input_dim,
+        else:
+            self.layers.append(GraphConvolution(configs = self.configs,
+                                            input_dim=self.input_dim,
                                             output_dim=self.configs['hidden1'],
                                             placeholders=self.placeholders,
                                             act=tf.nn.relu,
@@ -157,12 +201,31 @@ class GCN(Model):
                                             sparse_inputs=True,
                                             logging=self.logging))
 
-        self.layers.append(GraphConvolution(input_dim=self.configs['hidden1'],
-                                            output_dim=self.output_dim,
-                                            placeholders=self.placeholders,
-                                            act=lambda x: x,
-                                            dropout=True,
-                                            logging=self.logging))
+            for i in range(self.configs['n_layers']-2):
+                self.layers.append(GraphConvolution(configs = self.configs,
+                                                    input_dim=self.configs['hidden1'],
+                                                    output_dim=self.configs['hidden1'],
+                                                    placeholders=self.placeholders,
+                                                    act=tf.nn.relu,
+                                                    dropout=True,
+                                                    logging=self.logging))
+    
+            self.layers.append(GraphConvolution(configs = self.configs,
+                                                input_dim=self.configs['hidden1'],
+                                                output_dim=self.output_dim,
+                                                placeholders=self.placeholders,
+                                                act=lambda x: x,
+                                                dropout=True,
+                                                logging=self.logging))
+
+        self.layers.append(tf.nn.softmax)
+        
+        if self.propagate_labels:
+            self.layers.append(LabelPropagation(configs = self.configs,
+                                                placeholders=self.placeholders,
+                                                act=lambda x: x,
+                                                logging=self.logging))
+        
 
     def predict(self):
-        return tf.nn.softmax(self.outputs)
+        return self.outputs

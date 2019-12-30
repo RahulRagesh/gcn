@@ -32,6 +32,8 @@ var/
 .installed.cfg
 *.egg
 results/ 
+Results/
+final_results/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

@@ -132,7 +132,7 @@ class Dense(Layer):
 
 class GraphConvolution(Layer):
     """Graph convolution layer."""
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+    def __init__(self, configs, input_dim, output_dim, placeholders, dropout=0.,
                  sparse_inputs=False, act=tf.nn.relu, bias=False,
                  featureless=False, **kwargs):
         super(GraphConvolution, self).__init__(**kwargs)
@@ -147,6 +147,13 @@ class GraphConvolution(Layer):
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
+        self.configs = configs 
+        self.is_attentive = configs.get('is_attentive',False)
+        if self.is_attentive:
+            self.indices = [support.indices for support in self.support]
+            self.num_indices = configs['feat_prop_num_indices']
+            self.num_nodes = configs['num_nodes']
+            self.attentive_feat_prop_init = tf.constant(configs['attentive_feat_prop_init'], dtype=tf.float32)
 
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
@@ -154,10 +161,15 @@ class GraphConvolution(Layer):
         with tf.variable_scope(self.name + '_vars'):
             for i in range(len(self.support)):
                 self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
-                                                        name='weights_' + str(i))
+                                                        name='weights_' + str(i), collections=[tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.GLOBAL_VARIABLES,  'model_weights'])
             if self.bias:
-                self.vars['bias'] = zeros([output_dim], name='bias')
+                self.vars['bias'] = zeros([output_dim], name='bias', collections=[tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.GLOBAL_VARIABLES,  'model_weights'])
 
+            if self.is_attentive:
+                for i in range(len(self.support)):
+                    self.vars['attentive_weights_' + str(i)] = from_tensor(configs['attentive_feat_prop_init'],(self.num_indices,), name='attentive_weights_' + str(i), collections = [tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.GLOBAL_VARIABLES,  'attentive_adj'])
+                    self.support[i] = tf.SparseTensor(self.indices[i], tf.identity(self.vars['attentive_weights_' + str(i)]), (self.num_nodes,self.num_nodes))
+        
         if self.logging:
             self._log_vars()
 
@@ -186,4 +198,37 @@ class GraphConvolution(Layer):
         if self.bias:
             output += self.vars['bias']
 
+        return self.act(output)
+
+class LabelPropagation(Layer):
+    """Label Propagation layer."""
+    def __init__(self, configs, placeholders, act=tf.nn.relu, **kwargs):
+        super(LabelPropagation, self).__init__(**kwargs)
+        
+        self.act = act
+        self.configs = configs 
+        self.learnable_label_propagation = configs.get('learnable_label_propagation',False)
+        self.label_adj_matrix = tf.SparseTensor(*configs['label_adj_matrix']) 
+
+
+        if self.learnable_label_propagation:
+            self.learable_aggregator_matrix = tf.SparseTensor(*configs['label_aggregator_matrix'])
+            self.indices = self.label_adj_matrix.indices
+            self.num_indices = configs['label_prop_num_indices']
+            self.num_nodes = configs['num_nodes']
+            self.vars['label_propagation_weights'] = from_tensor(configs['attentive_label_prop_init'], (self.num_indices,1), name='label_weights', collections = [tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.GLOBAL_VARIABLES,  'attentive_label'])
+            self.vars['label_propagation_weights'] = tf.exp(self.vars['label_propagation_weights'])
+            self.norm_vector = dot(self.learable_aggregator_matrix, self.vars['label_propagation_weights'],sparse=True)
+            self.vars['label_propagation_weights'] = tf.reshape(self.vars['label_propagation_weights'] / self.norm_vector, (-1,))
+            
+            self.adj = tf.SparseTensor(self.indices, self.vars['label_propagation_weights'], (self.num_nodes,self.num_nodes))
+        else:
+            self.adj = self.label_adj_matrix
+
+            
+        if self.logging:
+            self._log_vars()
+
+    def _call(self, inputs):
+        output = dot(self.adj, inputs, sparse=True)
         return self.act(output)
