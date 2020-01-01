@@ -14,14 +14,12 @@ from shutil import copyfile
 import pandas as pd 
 import optuna 
 
-
 class Objective(object):
     def __init__(self, config_file, verbose=False):
         self.verbose = verbose
         config_dict = load_config_file(config_file)
 
         configs = ast.literal_eval(config_dict['configs'])
-        self.output_dir = create_dir(configs['output_dir'])
         self.training_params_dict = ast.literal_eval(config_dict['training_params'])
         self.feature_prop_params_dict = ast.literal_eval(config_dict['feature_prop_params'])
 
@@ -30,8 +28,46 @@ class Objective(object):
         self.optuna_params_dict = ast.literal_eval(config_dict['optuna_params'])
         self.configs_dict = {**configs, **self.training_params_dict, **self.feature_prop_params_dict, **self.label_prop_params_dict, **self.ssl_params_dict, **self.optuna_params_dict}
 
+        output_dir = configs['output_dir']
+        if self.configs_dict['direction'] == 'minimize':
+            output_dir = os.path.join(output_dir,'val_loss_minimize')
+        else:
+            output_dir = os.path.join(output_dir,'val_acc_maximize')
+        
+        if not self.configs_dict['is_attentive'] and not self.configs_dict['propagate_labels']:
+            output_dir = os.path.join(output_dir,'GCN')
+            fp_type = ''
+            lp_type = ''
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_layers']))
+
+        elif self.configs_dict['is_attentive'] and not self.configs_dict['propagate_labels']:
+            output_dir = os.path.join(output_dir,'GCN_AFP')
+            fp_type = 'l2_init_wts_'
+            lp_type = ''
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_layers']))
+
+        elif not self.configs_dict['is_attentive'] and self.configs_dict['propagate_labels']:
+            output_dir = os.path.join(output_dir,'GCN_LP')
+            fp_type = ''
+            lp_type = "learnable_prob_dist_" if self.configs_dict['learnable_label_propagation'] else "fixed_"
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_layers']))
+
+        else:
+            output_dir = os.path.join(output_dir,'GCN_AFP_LP')
+            fp_type = 'l2_init_wts_'
+            lp_type = "learnable_prob_dist_" if self.configs_dict['learnable_label_propagation'] else "fixed_"
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_layers']))
+
+        
+        
+        output_dir = os.path.join(output_dir, self.configs_dict['dataset'])
+        self.output_dir = create_dir(output_dir)
+        print('Saving Results to ',self.output_dir)
+        
+        self.trials_dir = self.output_dir + '/trials/'
+        os.makedirs(self.trials_dir)
+
         copyfile(config_file, self.output_dir+'/config.txt')
-        self.training_logs_dir = create_dir(self.output_dir+'/training_logs')
 
         self.configs_dict['output_dir'] = self.output_dir
         
@@ -40,13 +76,13 @@ class Objective(object):
 
         # Add Self Nodes
         self.adj_feat = self.adj + sp.eye(self.adj.shape[0])
-        for k in range(2,self.feature_prop_params_dict['feat_prop_k']):
+        for k in range(2,self.feature_prop_params_dict['feat_prop_k']+1):
             self.adj_feat = self.adj_feat @ self.adj_feat 
         self.adj_feat.data = np.ones_like(self.adj_feat.data)
 
         # Add Self Nodes
         self.adj_label = self.adj + sp.eye(self.adj.shape[0])
-        for k in range(2,self.label_prop_params_dict['label_prop_k']):
+        for k in range(2,self.label_prop_params_dict['label_prop_k']+1):
             self.adj_label = self.adj_label @ self.adj_label 
         self.adj_label.data = np.ones_like(self.adj_label.data)
 
@@ -213,11 +249,12 @@ class Objective(object):
 
                 if patience_count > self.configs_dict['early_stopping']:
                     print("Early stopping...")
+                    self.config_dir = self.trials_dir + '/trial_%05d/'%trial.number
+                    if not os.path.exists(self.config_dir):
+                        os.makedirs(self.config_dir)
+
                     training_log = pd.DataFrame(np.array(training_log), columns = self.column_header)
-                    training_log.to_csv(self.training_logs_dir+'/'+'trial_%05d.csv'%trial.number, index=False)
-                    
-                    self.config_dir = self.output_dir + '/trial_%05d/'%trial.number
-                    os.makedirs(self.config_dir)
+                    training_log.to_csv(self.config_dir+'/'+'trial_%05d.csv'%trial.number, index=False)
                     
                     attentive_weights = []
                     if self.configs_dict['is_attentive']:
@@ -229,8 +266,27 @@ class Objective(object):
                         lb_prop_wts = sess.run(model.layers[-1].vars['label_propagation_weights'])
                         pkl_dump(self.config_dir + '/lb_prop_wts.pkl', lb_prop_wts)
                     
-                    return best_config_loss  
-            return best_config_loss  
+                    return result  
+           
+            
+            self.config_dir = self.trials_dir + '/trial_%05d/'%trial.number
+            if not os.path.exists(self.config_dir):
+                os.makedirs(self.config_dir)
+
+            training_log = pd.DataFrame(np.array(training_log), columns = self.column_header)
+            training_log.to_csv(self.config_dir+'/'+'trial_%05d.csv'%trial.number, index=False)
+            
+            attentive_weights = []
+            if self.configs_dict['is_attentive']:
+                for i in range(self.configs_dict['n_layers']):
+                    attentive_weights.append(sess.run(model.layers[i].vars['attentive_weights_0']))                
+                    pkl_dump(self.config_dir + '/layer_%d_attentive_weights.pkl'%i, attentive_weights[-1])
+                
+            if self.configs_dict['propagate_labels'] and self.configs_dict['learnable_label_propagation']:
+                lb_prop_wts = sess.run(model.layers[-1].vars['label_propagation_weights'])
+                pkl_dump(self.config_dir + '/lb_prop_wts.pkl', lb_prop_wts)
+
+            return result  
 
 def trial_log_callback(study, trial):
     print('\nTRIAL ', trial.number)
@@ -253,6 +309,14 @@ def trial_log_callback(study, trial):
         print('-----------------------------------------------------------\n')
 
 
+def print_and_log(msg, log_file, write_mode='a'):
+    """
+    print `msg` (string) on stdout and also append ('a') or write ('w') (default 'a') it to `log_file`
+    """
+    print(msg)
+    with open(log_file, write_mode) as f:
+        f.write(msg + '\n')
+
 config_dict = load_config_file(sys.argv[1])
 optuna_params_dict = ast.literal_eval(config_dict['optuna_params'])
 study = optuna.create_study(direction=optuna_params_dict['direction'])
@@ -260,22 +324,25 @@ optuna.logging.disable_default_handler()
 objective = Objective(sys.argv[1], verbose = optuna_params_dict['verbose'])
 study.optimize(objective, n_trials=optuna_params_dict['n_trials'], callbacks = [trial_log_callback])
 trial = study.best_trial 
+log_file = objective.output_dir + '/log.txt'
+
+print_and_log('Results Saved to %s'%objective.output_dir,log_file)
 
 print("Best Hyperparameters")
 for key, value in trial.params.items():
-    print(key,' : ',value)
+    print_and_log('%s : %s'%(key,str(value)), log_file)
 
 pkl_dump(objective.output_dir+'/best_config.pkl',trial.params)
 
 
-print("\n\nBest Metrics")
-print('BEST TRIAL N0    - ', trial.number)
-print('Train Accuracy   - ', trial.user_attrs['Train Accuracy'])
-print('Train Loss       - ', trial.user_attrs['Train Loss'])
-print('Val Accuracy     - ', trial.user_attrs['Val Accuracy'])
-print('Val Loss         - ', trial.user_attrs['Val Loss'])
-print('Test Accuracy    - ', trial.user_attrs['Test Accuracy'])
-print('Test Loss        - ', trial.user_attrs['Test Loss'])
+print_and_log("\n\nBest Metrics", log_file)
+print_and_log('BEST TRIAL N0    - %d'%trial.number, log_file)
+print_and_log('Train Accuracy   - %0.04f'%trial.user_attrs['Train Accuracy'], log_file)
+print_and_log('Train Loss       - %0.04f'%trial.user_attrs['Train Loss'], log_file)
+print_and_log('Val Accuracy     - %0.04f'%trial.user_attrs['Val Accuracy'], log_file)
+print_and_log('Val Loss         - %0.04f'%trial.user_attrs['Val Loss'], log_file)
+print_and_log('Test Accuracy    - %0.04f'%trial.user_attrs['Test Accuracy'], log_file)
+print_and_log('Test Loss        - %0.04f'%trial.user_attrs['Test Loss'], log_file)
 
 pkl_dump(objective.output_dir+'/best_metrics.pkl',trial.user_attrs)
 
