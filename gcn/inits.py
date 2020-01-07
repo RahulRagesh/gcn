@@ -31,4 +31,4 @@ def ones(shape, name=None, collections = None):
     return tf.Variable(initial, name=name, collections=collections)
 
 def from_tensor(tensor, shape, name=None, collections = None):
-    return tf.Variable(tensor, shape=shape, name=name, dtype=tf.float32, collections=collections)
+    return tf.Variable(tensor, name=name, dtype=tf.float32, collections=collections)
