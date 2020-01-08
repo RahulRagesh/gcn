@@ -7,7 +7,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from itertools import product
 from gcn.utils import *
-from gcn.models import GCN, MLP
+from gcn.models import GCN, NGCN, MLP
 import sys 
 import ast 
 from shutil import copyfile
@@ -38,25 +38,25 @@ class Objective(object):
             output_dir = os.path.join(output_dir,'GCN')
             fp_type = ''
             lp_type = ''
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_gcn_layers']))
 
         elif self.configs_dict['is_attentive'] and not self.configs_dict['propagate_labels']:
             output_dir = os.path.join(output_dir,'GCN_AFP')
             fp_type = 'l2_init_wts_'
             lp_type = ''
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_gcn_layers']))
 
         elif not self.configs_dict['is_attentive'] and self.configs_dict['propagate_labels']:
             output_dir = os.path.join(output_dir,'GCN_LP')
             fp_type = ''
             lp_type = "learnable_prob_dist_" if self.configs_dict['learnable_label_propagation'] else "fixed_"
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_gcn_layers']))
 
         else:
             output_dir = os.path.join(output_dir,'GCN_AFP_LP')
             fp_type = 'l2_init_wts_'
             lp_type = "learnable_prob_dist_" if self.configs_dict['learnable_label_propagation'] else "fixed_"
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_gcn_layers']))
 
         
         
@@ -92,6 +92,10 @@ class Objective(object):
             self.support = [preprocess_adj(self.adj_feat)]
             self.num_supports = 1
             self.model_func = GCN
+        elif configs['model'] == 'ngcn':
+            self.support = [preprocess_adj(self.adj_feat)]
+            self.num_supports = 1
+            self.model_func = NGCN
         elif configs['model'] == 'gcn_cheby':
             self.support = chebyshev_polynomials(self.adj_feat, configs['max_degree'])
             self.num_supports = 1 + configs['max_degree']
@@ -127,7 +131,7 @@ class Objective(object):
         np.random.seed(seed)
         tf.set_random_seed(seed)
         wt_reg = []
-        for i in range(self.configs_dict['n_layers']):
+        for i in range(self.configs_dict['n_gcn_layers']):
             if  self.training_params_dict['weight_decay'][0] == 'Sweep':
                 if self.training_params_dict['weight_decay'][1] =='LogUniform':
                     wt_reg.append(trial.suggest_loguniform('Wt_Reg_%d'%i, self.training_params_dict['weight_decay'][2], self.training_params_dict['weight_decay'][3]))
@@ -155,7 +159,7 @@ class Objective(object):
         
         if self.configs_dict['is_attentive']:
             attentive_reg = []
-            for i in range(self.configs_dict['n_layers']):
+            for i in range(self.configs_dict['n_gcn_layers']):
                 if  self.feature_prop_params_dict['attentive_reg'][0] == 'Sweep':
                     if self.feature_prop_params_dict['attentive_reg'][1] =='LogUniform':
                         attentive_reg.append(trial.suggest_loguniform('Attentive_Reg_%d'%i, self.feature_prop_params_dict['attentive_reg'][2], self.feature_prop_params_dict['attentive_reg'][3]))
@@ -258,8 +262,8 @@ class Objective(object):
                     
                     attentive_weights = []
                     if self.configs_dict['is_attentive']:
-                        for i in range(self.configs_dict['n_layers']):
-                            attentive_weights.append(sess.run(model.layers[i].vars['attentive_weights_0']))                
+                        for i in range(self.configs_dict['n_gcn_layers']):
+                            attentive_weights.append(sess.run(model.layers[i+self.configs_dict['n_feat_layers']].vars['attentive_weights_0']))                
                             pkl_dump(self.config_dir + '/layer_%d_attentive_weights.pkl'%i, attentive_weights[-1])
                         
                     if self.configs_dict['propagate_labels'] and self.configs_dict['learnable_label_propagation']:
@@ -278,8 +282,8 @@ class Objective(object):
             
             attentive_weights = []
             if self.configs_dict['is_attentive']:
-                for i in range(self.configs_dict['n_layers']):
-                    attentive_weights.append(sess.run(model.layers[i].vars['attentive_weights_0']))                
+                for i in range(self.configs_dict['n_gcn_layers']):
+                    attentive_weights.append(sess.run(model.layers[i+self.configs_dict['n_feat_layers']].vars['attentive_weights_0']))                
                     pkl_dump(self.config_dir + '/layer_%d_attentive_weights.pkl'%i, attentive_weights[-1])
                 
             if self.configs_dict['propagate_labels'] and self.configs_dict['learnable_label_propagation']:
