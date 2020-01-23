@@ -6,8 +6,9 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from itertools import product
-from gcn.utils import *
-from gcn.models import GCN, MLP
+from utils import *
+from models import GCN, NGCN, FANLT, MLP
+from optuna.samplers import TPESampler
 import sys 
 import ast 
 from shutil import copyfile
@@ -35,32 +36,35 @@ class Objective(object):
             output_dir = os.path.join(output_dir,'val_acc_maximize')
         
         if not self.configs_dict['is_attentive'] and not self.configs_dict['propagate_labels']:
-            output_dir = os.path.join(output_dir,'GCN')
+            output_dir = os.path.join(output_dir,'%s'%configs['model'].upper())
             fp_type = ''
             lp_type = ''
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_prop_layers']))
 
         elif self.configs_dict['is_attentive'] and not self.configs_dict['propagate_labels']:
-            output_dir = os.path.join(output_dir,'GCN_AFP')
+            output_dir = os.path.join(output_dir,'%s_AFP'%configs['model'].upper())
             fp_type = 'l2_init_wts_'
             lp_type = ''
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,0, self.configs_dict['n_prop_layers']))
 
         elif not self.configs_dict['is_attentive'] and self.configs_dict['propagate_labels']:
-            output_dir = os.path.join(output_dir,'GCN_LP')
+            output_dir = os.path.join(output_dir,'%s_LP'%configs['model'].upper())
             fp_type = ''
             lp_type = "learnable_prob_dist_" if self.configs_dict['learnable_label_propagation'] else "fixed_"
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_prop_layers']))
 
         else:
-            output_dir = os.path.join(output_dir,'GCN_AFP_LP')
+            output_dir = os.path.join(output_dir,'%s_AFP_LP'%configs['model'].upper())
             fp_type = 'l2_init_wts_'
             lp_type = "learnable_prob_dist_" if self.configs_dict['learnable_label_propagation'] else "fixed_"
-            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_layers']))
+            output_dir = os.path.join(output_dir,"%sA%d_%sA%d_L%d"%(fp_type,self.configs_dict['feat_prop_k'],lp_type,self.configs_dict['label_prop_k'], self.configs_dict['n_prop_layers']))
 
-        
-        
+        output_dir = os.path.join(output_dir,'F%d_%d'%(self.configs_dict['n_feat_layers'],self.configs_dict['feat_transform_dim']))
         output_dir = os.path.join(output_dir, self.configs_dict['dataset'])
+        try:
+            output_dir = os.environ['PT_OUTPUT_DIR'] + '/' + output_dir
+        except:
+            pass
         self.output_dir = create_dir(output_dir)
         print('Saving Results to ',self.output_dir)
         
@@ -92,6 +96,17 @@ class Objective(object):
             self.support = [preprocess_adj(self.adj_feat)]
             self.num_supports = 1
             self.model_func = GCN
+            self.buffer = 0
+        elif configs['model'] == 'ngcn':
+            self.support = [preprocess_adj(self.adj_feat)]
+            self.num_supports = 1
+            self.model_func = NGCN
+            self.buffer = 1
+        elif configs['model'] == 'fanlt':
+            self.support = [preprocess_adj(self.adj_feat)]
+            self.num_supports = 1
+            self.model_func = FANLT
+            self.buffer = 1
         elif configs['model'] == 'gcn_cheby':
             self.support = chebyshev_polynomials(self.adj_feat, configs['max_degree'])
             self.num_supports = 1 + configs['max_degree']
@@ -127,7 +142,7 @@ class Objective(object):
         np.random.seed(seed)
         tf.set_random_seed(seed)
         wt_reg = []
-        for i in range(self.configs_dict['n_layers']):
+        for i in range(self.configs_dict['n_prop_layers']):
             if  self.training_params_dict['weight_decay'][0] == 'Sweep':
                 if self.training_params_dict['weight_decay'][1] =='LogUniform':
                     wt_reg.append(trial.suggest_loguniform('Wt_Reg_%d'%i, self.training_params_dict['weight_decay'][2], self.training_params_dict['weight_decay'][3]))
@@ -155,7 +170,7 @@ class Objective(object):
         
         if self.configs_dict['is_attentive']:
             attentive_reg = []
-            for i in range(self.configs_dict['n_layers']):
+            for i in range(self.configs_dict['n_prop_layers']):
                 if  self.feature_prop_params_dict['attentive_reg'][0] == 'Sweep':
                     if self.feature_prop_params_dict['attentive_reg'][1] =='LogUniform':
                         attentive_reg.append(trial.suggest_loguniform('Attentive_Reg_%d'%i, self.feature_prop_params_dict['attentive_reg'][2], self.feature_prop_params_dict['attentive_reg'][3]))
@@ -163,7 +178,7 @@ class Objective(object):
                         attentive_reg.append(trial.suggest_uniform('Attentive_Reg_%d'%i, self.feature_prop_params_dict['attentive_reg'][2], self.feature_prop_params_dict['attentive_reg'][3]))                
                     self.configs_dict['attentive_reg'] = tuple(attentive_reg)
                 else:
-                    self.configs_dict['attentive_reg'] = self.training_params_dict['attentive_reg'][1]
+                    self.configs_dict['attentive_reg'] = self.feature_prop_params_dict['attentive_reg'][1]
                 
    
         # Define placeholders
@@ -177,7 +192,7 @@ class Objective(object):
         }
         
         # Create model
-        model = self.model_func(placeholders, self.configs_dict, input_dim=self.features[2][1], logging=True)
+        self.model = self.model_func(placeholders, self.configs_dict, input_dim=self.features[2][1], logging=True)
 
         with tf.Session() as sess:                
             sess.run(tf.global_variables_initializer())
@@ -198,12 +213,12 @@ class Objective(object):
                 else:   
                     _, training_loss, pred_error, attentive_reg, weight_reg = sess.run([model.model_weights_opt, model.loss,  model.pred_error, model.attentive_reg, model.weight_reg], feed_dict=feed_dict)
                 '''
-                _, training_loss, pred_error, attentive_reg, weight_reg = sess.run([model.opt_op, model.loss,  model.pred_error, model.attentive_reg, model.weight_reg], feed_dict=feed_dict)
+                _, training_loss, pred_error, attentive_reg, weight_reg = sess.run([self.model.opt_op, self.model.loss,  self.model.pred_error, self.model.attentive_reg, self.model.weight_reg], feed_dict=feed_dict)
 
                 # Validation
-                loss_train, acc_train, duration = evaluate(sess, model, self.features, self.support, self.y_train, self.train_mask, placeholders)
-                loss_val, acc_val, duration = evaluate(sess, model, self.features, self.support, self.y_val, self.val_mask, placeholders)
-                loss_test, acc_test, duration = evaluate(sess, model, self.features, self.support, self.y_test, self.test_mask, placeholders)
+                loss_train, acc_train, duration = evaluate(sess, self.model, self.features, self.support, self.y_train, self.train_mask, placeholders)
+                loss_val, acc_val, duration = evaluate(sess, self.model, self.features, self.support, self.y_val, self.val_mask, placeholders)
+                loss_test, acc_test, duration = evaluate(sess, self.model, self.features, self.support, self.y_test, self.test_mask, placeholders)
                 
                 epoch_stats = [epoch+1, training_loss, pred_error, attentive_reg, weight_reg, loss_train, acc_train, loss_val, acc_val, loss_test, acc_test]
                 training_log.append(epoch_stats)
@@ -255,17 +270,21 @@ class Objective(object):
 
                     training_log = pd.DataFrame(np.array(training_log), columns = self.column_header)
                     training_log.to_csv(self.config_dir+'/'+'trial_%05d.csv'%trial.number, index=False)
-                    
+                    '''
                     attentive_weights = []
                     if self.configs_dict['is_attentive']:
-                        for i in range(self.configs_dict['n_layers']):
-                            attentive_weights.append(sess.run(model.layers[i].vars['attentive_weights_0']))                
+                        for i in range(self.configs_dict['n_prop_layers']):
+                            if self.configs_dict['model'] == 'ngcn':
+                                p = 2
+                            else:
+                                p = 1
+                            attentive_weights.append(sess.run(self.model.layers[i*p+self.buffer].vars['attentive_weights_0']))                
                             pkl_dump(self.config_dir + '/layer_%d_attentive_weights.pkl'%i, attentive_weights[-1])
                         
                     if self.configs_dict['propagate_labels'] and self.configs_dict['learnable_label_propagation']:
-                        lb_prop_wts = sess.run(model.layers[-1].vars['label_propagation_weights'])
+                        lb_prop_wts = sess.run(self.model.layers[-1].vars['label_propagation_weights'])
                         pkl_dump(self.config_dir + '/lb_prop_wts.pkl', lb_prop_wts)
-                    
+                    '''
                     return result  
            
             
@@ -275,17 +294,17 @@ class Objective(object):
 
             training_log = pd.DataFrame(np.array(training_log), columns = self.column_header)
             training_log.to_csv(self.config_dir+'/'+'trial_%05d.csv'%trial.number, index=False)
-            
+            '''
             attentive_weights = []
             if self.configs_dict['is_attentive']:
-                for i in range(self.configs_dict['n_layers']):
-                    attentive_weights.append(sess.run(model.layers[i].vars['attentive_weights_0']))                
+                for i in range(self.configs_dict['n_prop_layers']):
+                    attentive_weights.append(sess.run(self.model.layers[i*p+self.buffer].vars['attentive_weights_0']))                
                     pkl_dump(self.config_dir + '/layer_%d_attentive_weights.pkl'%i, attentive_weights[-1])
                 
             if self.configs_dict['propagate_labels'] and self.configs_dict['learnable_label_propagation']:
-                lb_prop_wts = sess.run(model.layers[-1].vars['label_propagation_weights'])
+                lb_prop_wts = sess.run(self.model.layers[-1].vars['label_propagation_weights'])
                 pkl_dump(self.config_dir + '/lb_prop_wts.pkl', lb_prop_wts)
-
+            '''
             return result  
 
 def trial_log_callback(study, trial):
@@ -319,7 +338,8 @@ def print_and_log(msg, log_file, write_mode='a'):
 
 config_dict = load_config_file(sys.argv[1])
 optuna_params_dict = ast.literal_eval(config_dict['optuna_params'])
-study = optuna.create_study(direction=optuna_params_dict['direction'])
+sampler = TPESampler(seed=123)
+study = optuna.create_study(direction=optuna_params_dict['direction'],sampler=sampler)
 optuna.logging.disable_default_handler()
 objective = Objective(sys.argv[1], verbose = optuna_params_dict['verbose'])
 study.optimize(objective, n_trials=optuna_params_dict['n_trials'], callbacks = [trial_log_callback])

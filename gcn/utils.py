@@ -23,6 +23,59 @@ def sample_mask(idx, l):
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
 
+def load_split_data(dataset_str, specs, data_dir='/mnt/_default/datasets/kFold'):
+    """
+    Loads input data from gcn/data directory
+
+    ind.dataset_str.x => the feature vectors of the training instances as scipy.sparse.csr.csr_matrix object;
+    ind.dataset_str.tx => the feature vectors of the test instances as scipy.sparse.csr.csr_matrix object;
+    ind.dataset_str.allx => the feature vectors of both labeled and unlabeled training instances
+        (a superset of ind.dataset_str.x) as scipy.sparse.csr.csr_matrix object;
+    ind.dataset_str.y => the one-hot labels of the labeled training instances as numpy.ndarray object;
+    ind.dataset_str.ty => the one-hot labels of the test instances as numpy.ndarray object;
+    ind.dataset_str.ally => the labels for instances in ind.dataset_str.allx as numpy.ndarray object;
+    ind.dataset_str.graph => a dict in the format {index: [index_of_neighbor_nodes]} as collections.defaultdict
+        object;
+    ind.dataset_str.test.index => the indices of test instances in graph, for the inductive setting as list object.
+
+    All objects above must be saved using python pickle module.
+
+    :param dataset_str: Dataset name
+    :return: All data input files loaded (as well the training/test data).
+    """
+    names = ['X', 'Y','graph']
+    objects = []
+    data_dir = data_dir +'/'+ dataset_str + '/'+specs
+    for i in range(len(names)):
+        with open("{}/ind.{}.{}".format(data_dir,dataset_str, names[i]), 'rb') as f:
+            if sys.version_info > (3, 0):
+                objects.append(pkl.load(f, encoding='latin1'))
+            else:
+                objects.append(pkl.load(f))
+
+    X, Y, graph = tuple(objects)
+    # read allx.index, train.index, val.index, and test.index
+    allx_idx = parse_index_file("{}/ind.{}.{}".format(data_dir,dataset_str, 'allx.index'))
+    train_idx = parse_index_file("{}/ind.{}.{}".format(data_dir,dataset_str, 'train.index'))
+    val_idx = parse_index_file("{}/ind.{}.{}".format(data_dir,dataset_str, 'val.index'))
+    test_idx = parse_index_file("{}/ind.{}.{}".format(data_dir,dataset_str, 'test.index'))
+
+    features = X.tolil()
+    labels = Y
+    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+
+    train_mask = sample_mask(train_idx, labels.shape[0])
+    val_mask = sample_mask(val_idx, labels.shape[0])
+    test_mask = sample_mask(test_idx, labels.shape[0])
+
+    y_train = np.zeros(labels.shape)
+    y_val = np.zeros(labels.shape)
+    y_test = np.zeros(labels.shape)
+    y_train[train_mask, :] = labels[train_mask, :]
+    y_val[val_mask, :] = labels[val_mask, :]
+    y_test[test_mask, :] = labels[test_mask, :]
+
+    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
 def load_data(dataset_str):
     """
@@ -47,14 +100,14 @@ def load_data(dataset_str):
     names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
     objects = []
     for i in range(len(names)):
-        with open("data/ind.{}.{}".format(dataset_str, names[i]), 'rb') as f:
+        with open("{}/ind.{}.{}".format(data_dir,dataset_str, names[i]), 'rb') as f:
             if sys.version_info > (3, 0):
                 objects.append(pkl.load(f, encoding='latin1'))
             else:
                 objects.append(pkl.load(f))
 
     x, y, tx, ty, allx, ally, graph = tuple(objects)
-    test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset_str))
+    test_idx_reorder = parse_index_file("{}/ind.{}.test.index".format(data_dir,dataset_str))
     test_idx_range = np.sort(test_idx_reorder)
 
     if dataset_str == 'citeseer':

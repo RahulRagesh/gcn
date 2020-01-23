@@ -1,0 +1,193 @@
+description: NAGCN - Citeseer
+
+target:
+  vc: msrlabs
+  cluster: gcr
+
+environment:
+    image: tensorflow/tensorflow:1.12.0-gpu-py3
+    setup:
+    - pip install --user optuna
+    - pip install --user networkx
+    - pip install --user pandas
+      
+
+storage:
+  _default:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_default
+
+  _output:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_output
+
+code:
+  local_dir: $CONFIG_DIR/../..
+
+data:
+  local_dir: $CONFIG_DIR/../../../data/tfrecords/
+  remote_dir: datasets/
+
+jobs:
+# GCN
+- name: NAGCN_A1_F1_16_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F1_16.conf 
+
+- name: NAGCN_A1_F1_32_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F1_32.conf 
+
+- name: NAGCN_A1_F1_64_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F1_64.conf 
+
+- name: NAGCN_A1_F1_128_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F1_128.conf 
+
+- name: NAGCN_A1_F2_16_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F2_16.conf 
+
+- name: NAGCN_A1_F2_32_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F2_32.conf 
+
+- name: NAGCN_A1_F2_64_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F2_64.conf 
+
+- name: NAGCN_A1_F2_128_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L1/NAGCN_A1_F2_128.conf 
+
+- name: NAGCN_A1_F1_16_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F1_16.conf 
+
+- name: NAGCN_A1_F1_32_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F1_32.conf 
+
+- name: NAGCN_A1_F1_64_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F1_64.conf 
+
+- name: NAGCN_A1_F1_128_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F1_128.conf 
+
+- name: NAGCN_A1_F2_16_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F2_16.conf 
+
+- name: NAGCN_A1_F2_32_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F2_32.conf 
+
+- name: NAGCN_A1_F2_64_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F2_64.conf 
+
+- name: NAGCN_A1_F2_128_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A1_L2/NAGCN_A1_F2_128.conf 
+
+- name: NAGCN_A2_F1_16_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F1_16.conf 
+
+- name: NAGCN_A2_F1_32_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F1_32.conf 
+
+- name: NAGCN_A2_F1_64_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F1_64.conf 
+
+- name: NAGCN_A2_F1_128_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F1_128.conf 
+
+- name: NAGCN_A2_F2_16_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F2_16.conf 
+
+- name: NAGCN_A2_F2_32_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F2_32.conf 
+
+- name: NAGCN_A2_F2_64_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F2_64.conf 
+
+- name: NAGCN_A2_F2_128_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L1/NAGCN_A2_F2_128.conf 
+
+- name: NAGCN_A2_F1_16_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F1_16.conf 
+
+- name: NAGCN_A2_F1_32_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F1_32.conf 
+
+- name: NAGCN_A2_F1_64_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F1_64.conf 
+
+- name: NAGCN_A2_F1_128_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F1_128.conf 
+
+- name: NAGCN_A2_F2_16_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F2_16.conf 
+
+- name: NAGCN_A2_F2_32_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F2_32.conf 
+
+- name: NAGCN_A2_F2_64_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F2_64.conf 
+
+- name: NAGCN_A2_F2_128_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/NAGCN/A2_L2/NAGCN_A2_F2_128.conf 

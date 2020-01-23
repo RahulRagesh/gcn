@@ -1,0 +1,154 @@
+description: NGCN_NAGCN - Pubmed KFold
+
+target:
+  vc: msrlabs
+  cluster: cam
+
+environment:
+    image: tensorflow/tensorflow:1.12.0-gpu-py3
+    setup:
+    - pip install --user optuna
+    - pip install --user networkx
+    - pip install --user pandas
+      
+
+storage:
+  _default:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_default
+
+  _output:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_output
+
+code:
+  local_dir: $CONFIG_DIR/../../..
+
+data:
+  local_dir: $CONFIG_DIR/../../../data/tfrecords/
+  remote_dir: datasets/
+
+jobs:
+# NGCN
+- name: NGCN_F1_L1_A1_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L1/A1_16.conf 
+
+- name: NGCN_F1_L1_A1_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L1/A1_64.conf 
+
+- name: NGCN_F1_L1_A1_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L1/A1_128.conf 
+
+- name: NGCN_F1_L1_A2_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L1/A2_16.conf 
+
+- name: NGCN_F1_L1_A2_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L1/A2_64.conf 
+
+- name: NGCN_F1_L1_A2_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L1/A2_128.conf 
+
+- name: NGCN_F1_L2_A1_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L2/A1_16.conf 
+
+- name: NGCN_F1_L2_A1_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L2/A1_64.conf 
+
+- name: NGCN_F1_L2_A1_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L2/A1_128.conf 
+
+- name: NGCN_F1_L2_A2_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L2/A2_16.conf 
+
+- name: NGCN_F1_L2_A2_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L2/A2_64.conf 
+
+- name: NGCN_F1_L2_A2_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NGCN/F1_L2/A2_128.conf 
+
+# NAGCN
+- name: NAGCN_F1_L1_A1_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L1/A1_16.conf 
+
+- name: NAGCN_F1_L1_A1_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L1/A1_64.conf 
+
+- name: NAGCN_F1_L1_A1_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L1/A1_128.conf 
+
+- name: NAGCN_F1_L1_A2_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L1/A2_16.conf 
+
+- name: NAGCN_F1_L1_A2_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L1/A2_64.conf 
+
+- name: NAGCN_F1_L1_A2_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L1/A2_128.conf 
+
+- name: NAGCN_F1_L2_A1_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L2/A1_16.conf 
+
+- name: NAGCN_F1_L2_A1_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L2/A1_64.conf 
+
+- name: NAGCN_F1_L2_A1_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L2/A1_128.conf 
+
+- name: NAGCN_F1_L2_A2_16
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L2/A2_16.conf 
+
+- name: NAGCN_F1_L2_A2_64
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L2/A2_64.conf 
+
+- name: NAGCN_F1_L2_A2_128
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Pubmed/P2/NAGCN/F1_L2/A2_128.conf 

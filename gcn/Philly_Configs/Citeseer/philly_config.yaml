@@ -1,0 +1,200 @@
+description: GCN Variants - Citeseer
+
+target:
+  vc: msrlabs
+  cluster: gcr
+
+environment:
+    image: tensorflow/tensorflow:1.12.0-gpu-py3
+    setup:
+    - pip install --user optuna
+    - pip install --user networkx
+    - pip install --user pandas
+      
+
+storage:
+  _default:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_default
+
+  _output:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_output
+
+code:
+  local_dir: $CONFIG_DIR/../..
+
+data:
+  local_dir: $CONFIG_DIR/../../../data/tfrecords/
+  remote_dir: datasets/
+
+jobs:
+# GCN
+- name: Citeseer_GCN_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN/A1_L1.conf 
+- name: Citeseer_GCN_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN/A1_L2.conf 
+- name: Citeseer_GCN_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN/A2_L1.conf 
+- name: Citeseer_GCN_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN/A2_L2.conf 
+# GCN AFP
+- name: Citeseer_GCN_AFP_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP/A1_L1.conf 
+- name: Citeseer_GCN_AFP_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP/A1_L2.conf 
+- name: Citeseer_GCN_AFP_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP/A2_L1.conf 
+- name: Citeseer_GCN_AFP_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP/A2_L2.conf 
+#GCN LP
+- name: Citeseer_GCN_LP_A1_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_A1_L1.conf 
+- name: Citeseer_GCN_LP_A1_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_A1_L2.conf 
+- name: Citeseer_GCN_LP_A1_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_A2_L1.conf 
+- name: Citeseer_GCN_LP_A1_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_A2_L2.conf 
+- name: Citeseer_GCN_LP_A2_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_A1_L1.conf 
+- name: Citeseer_GCN_LP_A2_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_A1_L2.conf 
+- name: Citeseer_GCN_LP_A2_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_A2_L1.conf 
+- name: Citeseer_GCN_LP_A2_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_A2_L2.conf 
+- name: Citeseer_GCN_LP_A1_learnable_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_learnable_A1_L1.conf 
+- name: Citeseer_GCN_LP_A1_learnable_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_learnable_A1_L2.conf 
+- name: Citeseer_GCN_LP_A1_learnable_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_learnable_A2_L1.conf 
+- name: Citeseer_GCN_LP_A1_learnable_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A1_learnable_A2_L2.conf 
+- name: Citeseer_GCN_LP_A2_learnable_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_learnable_A1_L1.conf 
+- name: Citeseer_GCN_LP_A2_learnable_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_learnable_A1_L2.conf 
+- name: Citeseer_GCN_LP_A2_learnable_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_learnable_A2_L1.conf 
+- name: Citeseer_GCN_LP_A2_learnable_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_LP/A2_learnable_A2_L2.conf 
+#GCN AFP LP
+- name: Citeseer_GCN_AFP_LP_A1_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_A1_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A1_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_A1_L2.conf 
+- name: Citeseer_GCN_AFP_LP_A1_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_A2_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A1_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_A2_L2.conf 
+- name: Citeseer_GCN_AFP_LP_A2_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_A1_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A2_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_A1_L2.conf 
+- name: Citeseer_GCN_AFP_LP_A2_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_A2_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A2_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_A2_L2.conf 
+
+- name: Citeseer_GCN_AFP_LP_A1_learnable_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_learnable_A1_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A1_learnable_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_learnable_A1_L2.conf 
+- name: Citeseer_GCN_AFP_LP_A1_learnable_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_learnable_A2_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A1_learnable_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A1_learnable_A2_L2.conf 
+- name: Citeseer_GCN_AFP_LP_A2_learnable_A1_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_learnable_A1_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A2_learnable_A1_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_learnable_A1_L2.conf 
+- name: Citeseer_GCN_AFP_LP_A2_learnable_A2_L1
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_learnable_A2_L1.conf 
+- name: Citeseer_GCN_AFP_LP_A2_learnable_A2_L2
+  sku: G1
+  command:
+  - python train_optuna.py Philly_Configs/Citeseer/GCN_AFP_LP/A2_learnable_A2_L2.conf 
+  
+

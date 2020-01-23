@@ -4,8 +4,8 @@ from __future__ import print_function
 import time
 import tensorflow as tf
 from itertools import product
-from gcn.utils import *
-from gcn.models import GCN, MLP
+from utils import *
+from models import GCN, MLP
 import sys 
 import ast 
 from shutil import copyfile

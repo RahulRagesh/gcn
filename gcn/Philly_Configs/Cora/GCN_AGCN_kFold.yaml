@@ -1,0 +1,67 @@
+description: GCN AGCN - Cora kFold
+
+target:
+  vc: msrlabs
+  cluster: cam
+
+environment:
+    image: tensorflow/tensorflow:1.12.0-gpu-py3
+    setup:
+    - pip install --user optuna
+    - pip install --user networkx
+    - pip install --user pandas
+      
+
+storage:
+  _default:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_default
+
+  _output:
+    storage_account_name: deegostorage
+    container_name: gcn
+    mount_dir: /mnt/_output
+
+code:
+  local_dir: $CONFIG_DIR/../..
+
+data:
+  local_dir: $CONFIG_DIR/../../../data/tfrecords/
+  remote_dir: datasets/
+
+jobs:
+# GCN
+- name: Cora_GCN_A1_L1
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN/A1_L1.conf 
+- name: Cora_GCN_A1_L2
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN/A1_L2.conf 
+- name: Cora_GCN_A2_L1
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN/A2_L1.conf 
+- name: Cora_GCN_A2_L2
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN/A2_L2.conf 
+# GCN AFP
+- name: Cora_GCN_AFP_A1_L1
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN_AFP/A1_L1.conf 
+- name: Cora_GCN_AFP_A1_L2
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN_AFP/A1_L2.conf 
+- name: Cora_GCN_AFP_A2_L1
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN_AFP/A2_L1.conf 
+- name: Cora_GCN_AFP_A2_L2
+  sku: G1
+  command:
+  - python train_optuna_kfold.py Philly_Configs/Cora/GCN_AFP/A2_L2.conf 

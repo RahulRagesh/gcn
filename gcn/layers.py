@@ -1,4 +1,4 @@
-from gcn.inits import *
+from inits import *
 import tensorflow as tf
 
 
@@ -104,9 +104,9 @@ class Dense(Layer):
 
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = glorot([input_dim, output_dim],
-                                          name='weights')
+                                          name='weights', collections=[tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.GLOBAL_VARIABLES,  'model_weights'])
             if self.bias:
-                self.vars['bias'] = zeros([output_dim], name='bias')
+                self.vars['bias'] = zeros([output_dim], name='bias', collections=[tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.GLOBAL_VARIABLES,  'model_weights'])
 
         if self.logging:
             self._log_vars()
@@ -199,6 +199,132 @@ class GraphConvolution(Layer):
             output += self.vars['bias']
 
         return self.act(output)
+
+class NonLinearFeatTransform(Layer):
+    """Non Linear Feature Transform layer."""
+    def __init__(self, configs, placeholders, input_dim, output_dim, sparse_inputs=False, logging =True, n_layers = -1, act=tf.nn.relu, dropout=True, **kwargs):
+        super(NonLinearFeatTransform, self).__init__(**kwargs)
+        
+        self.act = act
+        self.configs = configs 
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.placeholders = placeholders
+        self.logging = logging
+        self.dropout = dropout
+        self.sparse_inputs = sparse_inputs
+        if self.logging:
+            self._log_vars()
+        
+        self.n_layers = self.configs['n_feat_layers'] if n_layers == -1 else n_layers
+
+    def _call(self, inputs):
+        if self.n_layers == 1:
+            layer = Dense(input_dim=self.input_dim,
+                        output_dim=self.output_dim,
+                        placeholders=self.placeholders,
+                        act= lambda x : x,
+                        dropout=self.dropout,
+                        sparse_inputs=self.sparse_inputs,
+                        logging=self.logging)
+            x = layer(inputs)
+            self.vars = {**self.vars, **layer.vars}
+
+        else:
+            layer =  Dense(input_dim=self.input_dim,
+                        output_dim=self.configs['feat_transform_dim'],
+                        placeholders=self.placeholders,
+                        act=tf.nn.relu,
+                        dropout=self.dropout,
+                        sparse_inputs=self.sparse_inputs,
+                        logging=self.logging)
+            
+            x = layer(inputs)
+            self.vars = {**self.vars, **layer.vars}
+                        
+            for i in range(self.n_layers-2):
+                layer = Dense(input_dim=self.configs['feat_transform_dim'],
+                            output_dim=self.configs['feat_transform_dim'],
+                            placeholders=self.placeholders,
+                            act=tf.nn.relu,
+                            dropout=self.dropout,
+                            sparse_inputs=False,
+                            logging=self.logging)
+                x = layer(x)
+                self.vars = {**self.vars, **layer.vars}
+
+
+            layer = Dense(input_dim=self.configs['feat_transform_dim'],
+                            output_dim=self.output_dim,
+                            placeholders=self.placeholders,
+                            act= lambda x : x,
+                            dropout=self.dropout,
+                            sparse_inputs=False,
+                            logging=self.logging)
+            x = layer(x)
+            self.vars = {**self.vars, **layer.vars}
+
+        return self.act(x)
+
+
+
+class FeatureAggregation(Layer):
+    """Feature Aggregation layer."""
+    def __init__(self, configs, placeholders, dropout=0.,
+                 sparse_inputs=False, act=tf.nn.relu, bias=False,
+                 featureless=False,
+                 logging=True,
+                 **kwargs):
+        super(FeatureAggregation, self).__init__(**kwargs)
+
+        if dropout:
+            self.dropout = placeholders['dropout']
+        else:
+            self.dropout = 0.
+
+        self.act = act
+        self.support = placeholders['support']
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+        self.configs = configs 
+        self.logging = logging
+        self.is_attentive = configs.get('is_attentive',False)
+        if self.is_attentive:
+            self.indices = [support.indices for support in self.support]
+            self.num_indices = configs['feat_prop_num_indices']
+            self.num_nodes = configs['num_nodes']
+            self.attentive_feat_prop_init = tf.constant(configs['attentive_feat_prop_init'], dtype=tf.float32)
+
+        # helper variable for sparse dropout
+        self.num_features_nonzero = placeholders['num_features_nonzero']
+
+        if self.is_attentive:
+            with tf.variable_scope(self.name + '_vars'):
+                for i in range(len(self.support)):
+                    self.vars['attentive_weights_' + str(i)] = from_tensor(configs['attentive_feat_prop_init'],(self.num_indices,), name='attentive_weights_' + str(i), collections = [tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.GLOBAL_VARIABLES,  'attentive_adj'])
+                    self.support[i] = tf.SparseTensor(self.indices[i], tf.identity(self.vars['attentive_weights_' + str(i)]), (self.num_nodes,self.num_nodes))
+        
+        if self.logging:
+            self._log_vars()
+
+    def _call(self, inputs):
+        x = inputs
+
+        # dropout
+        if self.sparse_inputs:
+            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+        else:
+            x = tf.nn.dropout(x, 1-self.dropout)
+
+        supports = list()
+        for i in range(len(self.support)):
+            support = dot(self.support[i], x, sparse=True)
+            supports.append(support)
+        output = tf.add_n(supports)
+
+        return self.act(output)
+
 
 class LabelPropagation(Layer):
     """Label Propagation layer."""
